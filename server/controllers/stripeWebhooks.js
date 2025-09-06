@@ -15,35 +15,39 @@ export const stripeWebhooks = async (request, response) => {
     );
   } catch (err) {
     console.log(`⚠️  Webhook signature verification failed.`);
-    return response.status(400).send(`Webhook Error: ${error.message}`)
+    return response.status(400).send(`Webhook Error: ${error.message}`);
   }
 
   try {
     switch (event.type) {
-        case "payment_intent.succeeded": {
-            const paymentIntent = event.data.object;
-            const sessionList = await stripeInstance.checkout.sessions.list({
-                payment_intent: paymentIntent.id
-            })
+      case "payment_intent.succeeded": {
+        const paymentIntent = event.data.object;
+        const sessionList = await stripeInstance.checkout.sessions.list({
+          payment_intent: paymentIntent.id,
+        });
 
-            const session = sessionList.data[0]
-            const { bookingId } = session.metadata;
+        const session = sessionList.data[0];
+        const { bookingId } = session.metadata;
 
-            await Booking.findByIdAndUpdate(bookingId, {
-                isPaid: true,
-                paymentLink: ""
-            })
+        await Booking.findByIdAndUpdate(bookingId, {
+          isPaid: true,
+          paymentLink: "",
+        });
 
-            break
-        }
+        // Send Conformation Email
+        await inngest.send({
+          name: "app/show.booked",
+          data: { bookingId },
+        });
+        break;
+      }
 
-        default:
-            console.log('Unhandled eent type: ', event.type);
+      default:
+        console.log("Unhandled eent type: ", event.type);
     }
     response.json({ received: true });
   } catch (err) {
     console.error("Webhook processing error: ", err);
-    response.status(500).send("Internal Server Error")
-    
+    response.status(500).send("Internal Server Error");
   }
 };
